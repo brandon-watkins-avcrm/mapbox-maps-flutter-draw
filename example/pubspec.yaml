@@ -35,7 +35,10 @@ dependencies:
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
-  mapbox_maps_flutter: ^2.3.0
+  mapbox_maps_flutter:
+    git:
+      url: https://github.com/brandon-watkins-avcrm/mapbox-maps-flutter.git
+      ref: 70ecac3
   mapbox_maps_flutter_draw:
     # When depending on this package from a real application you should use:
     # mapbox_maps_flutter_draw: ^x.y.z
