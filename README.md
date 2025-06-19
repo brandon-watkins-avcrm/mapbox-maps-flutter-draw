@@ -21,6 +21,7 @@ A Flutter package to draw, edit, and delete points, lines, and polygons on a Map
 - **Delete Geometries**: Remove existing geometries.
 - **Undo Last Edit**: Undo the last edit.
 - **Manage Geometries**: Store and retrieve multiple geometries.
+- **Real-time Updates**: Listen to polygon points changes during drawing via streams.
 
 
 <img width="300px" src="https://github.com/felixerdy/mapbox-maps-flutter-draw/blob/main/doc/example.png?raw=true" />
@@ -93,8 +94,45 @@ class _MyHomePageState extends State<MyHomePage> {
 - **`getAllLines()`**: Retrieves all lines currently stored by delegating to the `LineHandler`.
 - **`addPolygons(List<Polygon> existingPolygons)`**: Adds existing polygons to the map by delegating to the `PolygonHandler`.
 - **`getAllPolygons()`**: Retrieves all polygons currently stored by delegating to the `PolygonHandler`.
+- **`polygonPointsStream`**: A stream that emits whenever the polygon points change during drawing. Returns `Stream<List<Point>>`.
+- **`currentPolygonPoints`**: Returns a copy of the current polygon points being drawn. Returns `List<Point>`.
 - **`undoLastAction()`**: Undoes the last action performed based on the current editing mode, delegating to the appropriate handler.
 - **`dispose()`**: Cleans up the annotation managers for points, lines, and polygons when the controller is no longer needed.
+
+### Listening to Polygon Points Changes
+
+You can listen to real-time changes of polygon points during drawing:
+
+```dart
+class _MyPageState extends State<MyPage> {
+  late MapboxDrawController _controller;
+  List<Point> _currentPolygonPoints = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = context.read<MapboxDrawController>();
+    
+    // Listen to polygon points changes
+    _controller.polygonPointsStream.listen((points) {
+      setState(() {
+        _currentPolygonPoints = points;
+      });
+      print('Polygon points changed: ${points.length} points');
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Text('Current polygon points: ${_currentPolygonPoints.length}'),
+        // Your map widget and other UI
+      ],
+    );
+  }
+}
+```
 
 ### GeometryChangeEvent
 - **`GeometryChangeType type`**: The type of change that occurred (e.g., `add` or `delete`).

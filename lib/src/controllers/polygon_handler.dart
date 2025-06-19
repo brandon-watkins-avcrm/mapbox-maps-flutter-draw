@@ -11,6 +11,10 @@ class PolygonHandler extends GeometryHandler {
   PolygonAnnotation? _currentPolygon;
   final List<PolygonAnnotation> polygons = [];
 
+  // Stream for polygon points changes
+  final StreamController<List<Point>> _polygonPointsController =
+      StreamController<List<Point>>.broadcast();
+
   // Annotation Managers
   CircleAnnotationManager? _circleAnnotationManager;
   PolygonAnnotationManager? _polygonAnnotationManager;
@@ -19,8 +23,17 @@ class PolygonHandler extends GeometryHandler {
 
   PolygonHandler(this._controller) : super(_controller);
 
-  /// Returns the current count of polygon points being drawn.
-  int get pointsCount => _polygonPoints.length;
+  /// Stream that emits whenever the polygon points change.
+  Stream<List<Point>> get polygonPointsStream =>
+      _polygonPointsController.stream;
+
+  /// Returns a copy of the current polygon points.
+  List<Point> get polygonPoints => List.unmodifiable(_polygonPoints);
+
+  /// Helper method to emit polygon points changes to the stream.
+  void _emitPolygonPointsChange() {
+    _polygonPointsController.add(List.unmodifiable(_polygonPoints));
+  }
 
   /// Initializes polygon-related annotation managers.
   @override
@@ -66,6 +79,7 @@ class PolygonHandler extends GeometryHandler {
     await _circleAnnotationManager?.deleteAll();
     _circleAnnotations.clear();
     _polygonPoints.clear();
+    _emitPolygonPointsChange();
     _currentPolygon = null;
     polygons.clear();
 
@@ -95,6 +109,7 @@ class PolygonHandler extends GeometryHandler {
     // Reset any existing drawing state
     _currentPolygon = null;
     _polygonPoints.clear();
+    _emitPolygonPointsChange();
     await _circleAnnotationManager?.deleteAll();
     _circleAnnotations.clear();
     _controller.notifyListeners();
@@ -122,6 +137,7 @@ class PolygonHandler extends GeometryHandler {
       await _circleAnnotationManager!.deleteAll();
       _circleAnnotations.clear();
       _polygonPoints.clear();
+      _emitPolygonPointsChange();
       _currentPolygon = null;
 
       if (onChange != null) {
@@ -148,6 +164,7 @@ class PolygonHandler extends GeometryHandler {
 
     _controller._setLoading(true);
     _polygonPoints.add(context.point);
+    _emitPolygonPointsChange();
     _controller.notifyListeners();
 
     try {
@@ -208,6 +225,7 @@ class PolygonHandler extends GeometryHandler {
 
     _controller._setLoading(true);
     _polygonPoints.removeLast();
+    _emitPolygonPointsChange();
     _controller.notifyListeners();
 
     try {
@@ -246,6 +264,7 @@ class PolygonHandler extends GeometryHandler {
     MapTapHandler().removeTapListener(_onMapTapListener);
     _polygonAnnotationManager?.deleteAll();
     _circleAnnotationManager?.deleteAll();
+    _polygonPointsController.close();
     polygons.clear();
   }
 }

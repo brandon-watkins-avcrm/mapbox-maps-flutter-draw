@@ -33,9 +33,6 @@ class MapboxDrawController with ChangeNotifier {
     _polygonHandler = PolygonHandler(this);
   }
 
-  /// Gets the current geometry handler.
-  GeometryHandler? get currentHandler => _currentHandler;
-
   /// Initializes the controller with a MapboxMap instance.
   Future<void> initialize(MapboxMap mapController,
       {Function(GeometryChangeEvent event)? onChange,
@@ -73,7 +70,8 @@ class MapboxDrawController with ChangeNotifier {
         // If already in the desired mode, toggle it off
         _editingMode = EditingMode.NONE;
         // Optionally, finalize the current editing mode
-        await _currentHandler?.finishDrawing(fromDelete: mode == EditingMode.DELETE);
+        await _currentHandler?.finishDrawing(
+            fromDelete: mode == EditingMode.DELETE);
       } else {
         // Switch to the desired mode
         _editingMode = mode;
@@ -136,6 +134,13 @@ class MapboxDrawController with ChangeNotifier {
   List<Polygon> getAllPolygons() {
     return _polygonHandler.getAll();
   }
+
+  /// Stream that emits whenever the polygon points change during drawing.
+  Stream<List<Point>> get polygonPointsStream =>
+      _polygonHandler.polygonPointsStream;
+
+  /// Returns a copy of the current polygon points being drawn.
+  List<Point> get currentPolygonPoints => _polygonHandler.polygonPoints;
 
   /// Undo the last action by delegating to the appropriate handler
   Future<void> undoLastAction() async {
