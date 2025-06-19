@@ -117,6 +117,36 @@ class PointHandler extends GeometryHandler {
     }
   }
 
+  /// Deletes all point annotations from the map.
+  Future<void> deleteAllPoints() async {
+    try {
+      if (_circleAnnotationManager != null && _points.isNotEmpty) {
+        // Store count for the change event
+        final deletedCount = _points.length;
+
+        // Delete all points from the map
+        await _circleAnnotationManager!.deleteAll();
+
+        // Clear the points list
+        _points.clear();
+
+        // Notify about the changes
+        if (onChange != null) {
+          for (int i = 0; i < deletedCount; i++) {
+            onChange!(GeometryChangeEvent(
+              changeType: GeometryChangeType.delete,
+              geometryType: GeometryType.point,
+            ));
+          }
+        }
+
+        notifyListeners();
+      }
+    } catch (e) {
+      print('Error deleting all points: $e');
+    }
+  }
+
   /// Undoes the last added circle.
   @override
   Future<void> undoLastAction() async {

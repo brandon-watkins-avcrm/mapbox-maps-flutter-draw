@@ -90,12 +90,18 @@ class _MyHomePageState extends State<MyHomePage> {
 - **`toggleDeleteMode()`**: Toggles delete mode, which allows for deletion of points, lines, or polygons.
 - **`addPoints(List<Point> existingPoints)`**: Adds existing points to the map by delegating to the `PointHandler`.
 - **`getAllPoints()`**: Retrieves all points currently stored by delegating to the `PointHandler`.
+- **`deleteAllPoints()`**: Deletes all points from the map by delegating to the `PointHandler`.
 - **`addLines(List<LineString> lines)`**: Adds existing lines to the map by delegating to the `LineHandler`.
 - **`getAllLines()`**: Retrieves all lines currently stored by delegating to the `LineHandler`.
+- **`deleteAllLines()`**: Deletes all lines from the map by delegating to the `LineHandler`.
 - **`addPolygons(List<Polygon> existingPolygons)`**: Adds existing polygons to the map by delegating to the `PolygonHandler`.
 - **`getAllPolygons()`**: Retrieves all polygons currently stored by delegating to the `PolygonHandler`.
+- **`deleteAllPolygons()`**: Deletes all polygons from the map by delegating to the `PolygonHandler`.
+- **`deleteAllGeometries()`**: Deletes all geometries (points, lines, and polygons) from the map.
 - **`polygonPointsStream`**: A stream that emits whenever the polygon points change during drawing. Returns `Stream<List<Point>>`.
 - **`currentPolygonPoints`**: Returns a copy of the current polygon points being drawn. Returns `List<Point>`.
+- **`polygonsStream`**: A stream that emits whenever the polygons change (added/deleted). Returns `Stream<List<Polygon>>`.
+- **`currentPolygons`**: Returns a copy of the current polygons on the map. Returns `List<Polygon>`.
 - **`undoLastAction()`**: Undoes the last action performed based on the current editing mode, delegating to the appropriate handler.
 - **`dispose()`**: Cleans up the annotation managers for points, lines, and polygons when the controller is no longer needed.
 
@@ -127,6 +133,45 @@ class _MyPageState extends State<MyPage> {
     return Column(
       children: [
         Text('Current polygon points: ${_currentPolygonPoints.length}'),
+        // Your map widget and other UI
+      ],
+    );
+  }
+}
+```
+
+### Listening to Polygons Changes
+
+You can also listen to changes in the polygons collection (when polygons are added or deleted):
+
+```dart
+class _MyPageState extends State<MyPage> {
+  late MapboxDrawController _controller;
+  List<Polygon> _currentPolygons = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = context.read<MapboxDrawController>();
+    
+    // Listen to polygons changes
+    _controller.polygonsStream.listen((polygons) {
+      setState(() {
+        _currentPolygons = polygons;
+      });
+      print('Polygons changed: ${polygons.length} polygons on map');
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Text('Total polygons: ${_currentPolygons.length}'),
+        ElevatedButton(
+          onPressed: () => _controller.deleteAllPolygons(),
+          child: Text('Delete All Polygons'),
+        ),
         // Your map widget and other UI
       ],
     );

@@ -236,6 +236,37 @@ class PolygonHandler extends GeometryHandler {
     }
   }
 
+  /// Deletes all polygon annotations from the map.
+  Future<void> deleteAllPolygons() async {
+    try {
+      if (_polygonAnnotationManager != null && polygons.isNotEmpty) {
+        // Store count for the change event
+        final deletedCount = polygons.length;
+
+        // Delete all polygons from the map
+        await _polygonAnnotationManager!.deleteAll();
+
+        // Clear the polygons list
+        polygons.clear();
+        _emitPolygonsChange();
+
+        // Notify about the changes
+        if (onChange != null) {
+          for (int i = 0; i < deletedCount; i++) {
+            onChange!(GeometryChangeEvent(
+              changeType: GeometryChangeType.delete,
+              geometryType: GeometryType.polygon,
+            ));
+          }
+        }
+
+        _controller.notifyListeners();
+      }
+    } catch (e) {
+      print('Error deleting all polygons: $e');
+    }
+  }
+
   /// Undoes the last added point and removes the corresponding circle.
   @override
   Future<void> undoLastAction() async {

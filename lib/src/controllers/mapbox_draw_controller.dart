@@ -117,12 +117,22 @@ class MapboxDrawController with ChangeNotifier {
     return _pointHandler.getAllPoints();
   }
 
+  /// Deletes all points by delegating to PointHandler.
+  Future<void> deleteAllPoints() async {
+    await _pointHandler.deleteAllPoints();
+  }
+
   Future<void> addLines(List<LineString> lines) async {
     await _lineHandler.addLines(lines);
   }
 
   List<LineString> getAllLines() {
     return _lineHandler.getAllLines();
+  }
+
+  /// Deletes all lines by delegating to LineHandler.
+  Future<void> deleteAllLines() async {
+    await _lineHandler.deleteAllLines();
   }
 
   /// Adds existing polygons by delegating to PolygonHandler.
@@ -133,6 +143,20 @@ class MapboxDrawController with ChangeNotifier {
   /// Retrieves all polygons by delegating to PolygonHandler.
   List<Polygon> getAllPolygons() {
     return _polygonHandler.getAll();
+  }
+
+  /// Deletes all polygons by delegating to PolygonHandler.
+  Future<void> deleteAllPolygons() async {
+    await _polygonHandler.deleteAllPolygons();
+  }
+
+  /// Deletes all geometries (points, lines, and polygons) from the map.
+  Future<void> deleteAllGeometries() async {
+    await Future.wait([
+      deleteAllPoints(),
+      deleteAllLines(),
+      deleteAllPolygons(),
+    ]);
   }
 
   /// Stream that emits whenever the polygon points change during drawing.

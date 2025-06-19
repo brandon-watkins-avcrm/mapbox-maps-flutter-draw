@@ -186,6 +186,36 @@ class LineHandler extends GeometryHandler {
     }
   }
 
+  /// Deletes all line annotations from the map.
+  Future<void> deleteAllLines() async {
+    try {
+      if (_polylineAnnotationManager != null && lines.isNotEmpty) {
+        // Store count for the change event
+        final deletedCount = lines.length;
+
+        // Delete all lines from the map
+        await _polylineAnnotationManager!.deleteAll();
+
+        // Clear the lines list
+        lines.clear();
+
+        // Notify about the changes
+        if (onChange != null) {
+          for (int i = 0; i < deletedCount; i++) {
+            onChange!(GeometryChangeEvent(
+              changeType: GeometryChangeType.delete,
+              geometryType: GeometryType.line,
+            ));
+          }
+        }
+
+        _controller.notifyListeners();
+      }
+    } catch (e) {
+      print('Error deleting all lines: $e');
+    }
+  }
+
   /// Undoes the last added point and removes the corresponding circle.
   @override
   Future<void> undoLastAction() async {
