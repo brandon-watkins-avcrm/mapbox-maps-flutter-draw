@@ -142,6 +142,12 @@ class MapboxDrawController with ChangeNotifier {
   /// Returns a copy of the current polygon points being drawn.
   List<Point> get currentPolygonPoints => _polygonHandler.polygonPoints;
 
+  /// Stream that emits whenever the polygons change.
+  Stream<List<Polygon>> get polygonsStream => _polygonHandler.polygonsStream;
+
+  /// Returns a copy of the current polygons.
+  List<Polygon> get currentPolygons => _polygonHandler.currentPolygons;
+
   /// Undo the last action by delegating to the appropriate handler
   Future<void> undoLastAction() async {
     _currentHandler?.undoLastAction();

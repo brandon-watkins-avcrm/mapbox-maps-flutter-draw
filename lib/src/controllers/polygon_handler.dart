@@ -15,6 +15,10 @@ class PolygonHandler extends GeometryHandler {
   final StreamController<List<Point>> _polygonPointsController =
       StreamController<List<Point>>.broadcast();
 
+  // Stream for polygons changes
+  final StreamController<List<Polygon>> _polygonsController =
+      StreamController<List<Polygon>>.broadcast();
+
   // Annotation Managers
   CircleAnnotationManager? _circleAnnotationManager;
   PolygonAnnotationManager? _polygonAnnotationManager;
@@ -27,12 +31,23 @@ class PolygonHandler extends GeometryHandler {
   Stream<List<Point>> get polygonPointsStream =>
       _polygonPointsController.stream;
 
+  /// Stream that emits whenever the polygons change.
+  Stream<List<Polygon>> get polygonsStream => _polygonsController.stream;
+
   /// Returns a copy of the current polygon points.
   List<Point> get polygonPoints => List.unmodifiable(_polygonPoints);
+
+  /// Returns a copy of the current polygons.
+  List<Polygon> get currentPolygons => polygons.map((e) => e.geometry).toList();
 
   /// Helper method to emit polygon points changes to the stream.
   void _emitPolygonPointsChange() {
     _polygonPointsController.add(List.unmodifiable(_polygonPoints));
+  }
+
+  /// Helper method to emit polygons changes to the stream.
+  void _emitPolygonsChange() {
+    _polygonsController.add(polygons.map((e) => e.geometry).toList());
   }
 
   /// Initializes polygon-related annotation managers.
@@ -95,6 +110,7 @@ class PolygonHandler extends GeometryHandler {
         print('Error adding polygon: $e');
       }
     }
+    _emitPolygonsChange();
     _controller.notifyListeners();
   }
 
@@ -131,6 +147,7 @@ class PolygonHandler extends GeometryHandler {
         );
 
         polygons.add(newPoly);
+        _emitPolygonsChange();
       }
 
       // Clean up
@@ -203,6 +220,7 @@ class PolygonHandler extends GeometryHandler {
       if (_polygonAnnotationManager != null) {
         await _polygonAnnotationManager!.delete(polygon);
         polygons.removeWhere((poly) => poly.id == polygon.id);
+        _emitPolygonsChange();
 
         if (onChange != null) {
           onChange!(GeometryChangeEvent(
@@ -265,6 +283,7 @@ class PolygonHandler extends GeometryHandler {
     _polygonAnnotationManager?.deleteAll();
     _circleAnnotationManager?.deleteAll();
     _polygonPointsController.close();
+    _polygonsController.close();
     polygons.clear();
   }
 }
