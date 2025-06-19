@@ -33,6 +33,9 @@ class MapboxDrawController with ChangeNotifier {
     _polygonHandler = PolygonHandler(this);
   }
 
+  /// Gets the current geometry handler.
+  GeometryHandler? get currentHandler => _currentHandler;
+
   /// Initializes the controller with a MapboxMap instance.
   Future<void> initialize(MapboxMap mapController,
       {Function(GeometryChangeEvent event)? onChange,

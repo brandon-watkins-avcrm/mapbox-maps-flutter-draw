@@ -19,6 +19,9 @@ class PolygonHandler extends GeometryHandler {
 
   PolygonHandler(this._controller) : super(_controller);
 
+  /// Returns the current count of polygon points being drawn.
+  int get pointsCount => _polygonPoints.length;
+
   /// Initializes polygon-related annotation managers.
   @override
   Future<void> initialize(MapboxMap mapController,
