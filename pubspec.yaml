@@ -14,7 +14,7 @@ dependencies:
   mapbox_maps_flutter:
     git:
       url: https://github.com/brandon-watkins-avcrm/mapbox-maps-flutter.git
-      ref: 5d7e58d
+      ref: d6aef5a
 
 dev_dependencies:
   flutter_test:
