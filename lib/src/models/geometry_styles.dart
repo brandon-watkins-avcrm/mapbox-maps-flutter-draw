@@ -53,3 +53,36 @@ class GeometryStyles {
     );
   }
 }
+
+/// A class that pairs a polygon geometry with optional individual styling.
+/// Use this when you want to add multiple polygons with different colors.
+class PolygonData {
+  /// The polygon geometry
+  final Polygon polygon;
+
+  /// The fill color for this polygon. If null, uses the default style color.
+  final Color? fillColor;
+
+  /// The outline color for this polygon. If null, uses the default style stroke color.
+  final Color? outlineColor;
+
+  /// The opacity for this polygon. If null, uses the default style opacity.
+  final double? opacity;
+
+  /// Optional metadata to associate with this polygon.
+  /// This can be any JSON-serializable map that you want to store with the polygon.
+  final Map<String, dynamic>? metadata;
+
+  PolygonData({
+    required this.polygon,
+    this.fillColor,
+    this.outlineColor,
+    this.opacity,
+    this.metadata,
+  });
+
+  /// Creates a PolygonData from just a Polygon geometry with default styling.
+  factory PolygonData.fromPolygon(Polygon polygon) {
+    return PolygonData(polygon: polygon);
+  }
+}

@@ -101,7 +101,8 @@ class _MyHomePageState extends State<MyHomePage> {
 
               _mapboxDrawController.addPolygons(
                 polygonString
-                    .map((e) => Polygon.fromJson(jsonDecode(e)))
+                    .map((e) =>
+                        PolygonData(polygon: Polygon.fromJson(jsonDecode(e))))
                     .toList(),
               );
             },

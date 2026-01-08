@@ -23,6 +23,21 @@ class PolygonHandler extends GeometryHandler {
   CircleAnnotationManager? _circleAnnotationManager;
   PolygonAnnotationManager? _polygonAnnotationManager;
 
+  // Current drawing style (used when drawing a new polygon)
+  Color? _currentDrawingFillColor;
+  Color? _currentDrawingOutlineColor;
+  double? _currentDrawingOpacity;
+  Map<String, dynamic>? _currentDrawingMetadata;
+
+  // Metadata storage (keyed by polygon annotation ID)
+  final Map<String, Map<String, dynamic>> _polygonMetadata = {};
+
+  // Initialization flag to prevent operations before managers are fully ready
+  bool _isInitialized = false;
+
+  /// Returns true if the polygon handler is fully initialized and ready for operations.
+  bool get isInitialized => _isInitialized;
+
   Function(GeometryChangeEvent event)? onChange;
 
   PolygonHandler(this._controller) : super(_controller);
@@ -82,12 +97,38 @@ class PolygonHandler extends GeometryHandler {
 
     // Register PolygonHandler tap listener
     MapTapHandler().addTapListener(_onMapTapListener);
+
+    // Small delay to ensure native-side managers are fully registered
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+
+    // Mark as initialized only after everything is set up
+    _isInitialized = true;
   }
 
   /// Adds existing polygons to the map.
-  Future<void> add(List<Polygon> existingPolygons) async {
-    if (_polygonAnnotationManager == null) {
-      print('PolygonAnnotationManager is not initialized.');
+  ///
+  /// Each [PolygonData] can have individual fill colors, outline colors, and opacity.
+  /// For polygons without custom styling, simply omit the color parameters.
+  ///
+  /// Example:
+  /// ```dart
+  /// await polygonHandler.add([
+  ///   PolygonData(
+  ///     polygon: myPolygon1,
+  ///     fillColor: Colors.blue,
+  ///     outlineColor: Colors.white,
+  ///     opacity: 0.7,
+  ///   ),
+  ///   PolygonData(
+  ///     polygon: myPolygon2,
+  ///     fillColor: Colors.green,
+  ///   ),
+  ///   PolygonData(polygon: myPolygon3), // Uses default styling
+  /// ]);
+  /// ```
+  Future<void> add(List<PolygonData> polygonDataList) async {
+    if (!_isInitialized || _polygonAnnotationManager == null) {
+      print('PolygonHandler is not fully initialized.');
       return;
     }
 
@@ -98,14 +139,23 @@ class PolygonHandler extends GeometryHandler {
     _currentPolygon = null;
     polygons.clear();
 
-    for (final polygon in existingPolygons) {
+    for (final item in polygonDataList) {
       try {
         final annotationOption = PolygonAnnotationOptions(
-          geometry: polygon,
+          geometry: item.polygon,
+          fillColor: item.fillColor?.value,
+          fillOutlineColor: item.outlineColor?.value,
+          fillOpacity: item.opacity,
         );
+
         final newPolyAnn =
             await _polygonAnnotationManager!.create(annotationOption);
         polygons.add(newPolyAnn);
+
+        // Store metadata in our Map if provided
+        if (item.metadata != null) {
+          _polygonMetadata[newPolyAnn.id] = item.metadata!;
+        }
       } catch (e) {
         print('Error adding polygon: $e');
       }
@@ -114,14 +164,54 @@ class PolygonHandler extends GeometryHandler {
     _controller.notifyListeners();
   }
 
-  /// Retrieves all polygons from the map.
-  List<Polygon> getAll() {
-    return polygons.map((e) => e.geometry).toList();
+  /// Retrieves all polygons from the map as [PolygonData] objects.
+  ///
+  /// Each returned [PolygonData] includes the polygon geometry and its
+  /// associated styling (fill color, outline color, opacity) and metadata.
+  List<PolygonData> getAll() {
+    return polygons
+        .map((e) => PolygonData(
+              polygon: e.geometry,
+              fillColor: e.fillColor != null ? Color(e.fillColor!) : null,
+              outlineColor: e.fillOutlineColor != null
+                  ? Color(e.fillOutlineColor!)
+                  : null,
+              opacity: e.fillOpacity,
+              metadata: _polygonMetadata[e.id],
+            ))
+        .toList();
   }
 
   /// Starts the polygon drawing process.
+  ///
+  /// Optional parameters allow you to set the color for the polygon being drawn:
+  /// - [fillColor]: The fill color for the polygon
+  /// - [outlineColor]: The outline/stroke color for the polygon
+  /// - [opacity]: The opacity of the polygon fill (0.0 to 1.0)
+  /// - [metadata]: Optional metadata to associate with the polygon
+  ///
+  /// Example:
+  /// ```dart
+  /// await polygonHandler.startDrawing(
+  ///   fillColor: Colors.blue,
+  ///   outlineColor: Colors.white,
+  ///   opacity: 0.7,
+  ///   metadata: {'name': 'Zone A', 'id': 123},
+  /// );
+  /// ```
   @override
-  Future<void> startDrawing() async {
+  Future<void> startDrawing({
+    Color? fillColor,
+    Color? outlineColor,
+    double? opacity,
+    Map<String, dynamic>? metadata,
+  }) async {
+    // Set the drawing style
+    _currentDrawingFillColor = fillColor;
+    _currentDrawingOutlineColor = outlineColor;
+    _currentDrawingOpacity = opacity;
+    _currentDrawingMetadata = metadata;
+
     // Reset any existing drawing state
     _currentPolygon = null;
     _polygonPoints.clear();
@@ -129,6 +219,48 @@ class PolygonHandler extends GeometryHandler {
     await _circleAnnotationManager?.deleteAll();
     _circleAnnotations.clear();
     _controller.notifyListeners();
+  }
+
+  /// Sets the color for the polygon currently being drawn.
+  ///
+  /// This can be called at any time during the drawing process to change
+  /// the color of the polygon being created.
+  ///
+  /// Example:
+  /// ```dart
+  /// polygonHandler.setDrawingStyle(
+  ///   fillColor: Colors.purple,
+  ///   outlineColor: Colors.yellow,
+  ///   opacity: 0.6,
+  ///   metadata: {'type': 'restricted'},
+  /// );
+  /// ```
+  void setDrawingStyle({
+    Color? fillColor,
+    Color? outlineColor,
+    double? opacity,
+    Map<String, dynamic>? metadata,
+  }) {
+    _currentDrawingFillColor = fillColor;
+    _currentDrawingOutlineColor = outlineColor;
+    _currentDrawingOpacity = opacity;
+    _currentDrawingMetadata = metadata;
+
+    // Update circle annotation manager colors to match
+    if (_circleAnnotationManager != null && fillColor != null) {
+      _circleAnnotationManager!.setCircleColor(fillColor.value);
+    }
+    if (_circleAnnotationManager != null && outlineColor != null) {
+      _circleAnnotationManager!.setCircleStrokeColor(outlineColor.value);
+    }
+  }
+
+  /// Clears the current drawing style, reverting to default colors.
+  void clearDrawingStyle() {
+    _currentDrawingFillColor = null;
+    _currentDrawingOutlineColor = null;
+    _currentDrawingOpacity = null;
+    _currentDrawingMetadata = null;
   }
 
   /// Finishes the polygon drawing process.
@@ -143,12 +275,23 @@ class PolygonHandler extends GeometryHandler {
         final newPoly = await _polygonAnnotationManager!.create(
           PolygonAnnotationOptions(
             geometry: Polygon.fromPoints(points: [_polygonPoints.toList()]),
+            fillColor: (_currentDrawingFillColor)?.value,
+            fillOutlineColor: (_currentDrawingOutlineColor)?.value,
+            fillOpacity: _currentDrawingOpacity,
           ),
         );
 
         polygons.add(newPoly);
+
+        // Store metadata in our Map if provided
+        if (_currentDrawingMetadata != null) {
+          _polygonMetadata[newPoly.id] = _currentDrawingMetadata!;
+        }
         _emitPolygonsChange();
       }
+
+      // Clear the drawing style after finishing
+      clearDrawingStyle();
 
       // Clean up
       await _circleAnnotationManager!.deleteAll();
@@ -179,6 +322,12 @@ class PolygonHandler extends GeometryHandler {
       return; // Only add points when in draw polygon mode and not loading
     }
 
+    // Check if fully initialized before processing taps
+    if (!_isInitialized) {
+      print('PolygonHandler not fully initialized, ignoring tap.');
+      return;
+    }
+
     _controller._setLoading(true);
     _polygonPoints.add(context.point);
     _emitPolygonPointsChange();
@@ -187,10 +336,21 @@ class PolygonHandler extends GeometryHandler {
     try {
       if (_polygonPoints.length > 2) {
         // Create polygon if it doesn't exist
-        _currentPolygon ??= await _polygonAnnotationManager!.create(
-          PolygonAnnotationOptions(
-              geometry: Polygon.fromPoints(points: [_polygonPoints.toList()])),
-        );
+        if (_currentPolygon == null) {
+          _currentPolygon = await _polygonAnnotationManager!.create(
+            PolygonAnnotationOptions(
+              geometry: Polygon.fromPoints(points: [_polygonPoints.toList()]),
+              fillColor: _currentDrawingFillColor?.value,
+              fillOutlineColor: _currentDrawingOutlineColor?.value,
+              fillOpacity: _currentDrawingOpacity,
+            ),
+          );
+
+          // Store metadata for preview polygon if provided
+          if (_currentDrawingMetadata != null) {
+            _polygonMetadata[_currentPolygon!.id] = _currentDrawingMetadata!;
+          }
+        }
 
         // Update the polygon with new points
         _currentPolygon?.geometry =
@@ -201,7 +361,10 @@ class PolygonHandler extends GeometryHandler {
 
       // Create a visual marker (circle) at the tapped point
       final circleAnnotation = await _circleAnnotationManager!.create(
-        CircleAnnotationOptions(geometry: context.point),
+        CircleAnnotationOptions(
+          geometry: context.point,
+          circleColor: _currentDrawingFillColor?.value,
+        ),
       );
 
       // Store the circle annotation for future removal
@@ -220,6 +383,8 @@ class PolygonHandler extends GeometryHandler {
       if (_polygonAnnotationManager != null) {
         await _polygonAnnotationManager!.delete(polygon);
         polygons.removeWhere((poly) => poly.id == polygon.id);
+        _polygonMetadata
+            .remove(polygon.id); // Remove metadata for deleted polygon
         _emitPolygonsChange();
 
         if (onChange != null) {
@@ -248,6 +413,7 @@ class PolygonHandler extends GeometryHandler {
 
         // Clear the polygons list
         polygons.clear();
+        _polygonMetadata.clear(); // Clear all metadata
         _emitPolygonsChange();
 
         // Notify about the changes
@@ -310,6 +476,7 @@ class PolygonHandler extends GeometryHandler {
   @override
   void dispose() {
     super.dispose();
+    _isInitialized = false;
     MapTapHandler().removeTapListener(_onMapTapListener);
     _polygonAnnotationManager?.deleteAll();
     _circleAnnotationManager?.deleteAll();

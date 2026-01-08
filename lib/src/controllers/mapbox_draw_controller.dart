@@ -33,6 +33,9 @@ class MapboxDrawController with ChangeNotifier {
     _polygonHandler = PolygonHandler(this);
   }
 
+  /// Returns true if the polygon handler is fully initialized and ready for operations.
+  bool get isPolygonHandlerReady => _polygonHandler.isInitialized;
+
   /// Initializes the controller with a MapboxMap instance.
   Future<void> initialize(MapboxMap mapController,
       {Function(GeometryChangeEvent event)? onChange,
@@ -136,12 +139,15 @@ class MapboxDrawController with ChangeNotifier {
   }
 
   /// Adds existing polygons by delegating to PolygonHandler.
-  Future<void> addPolygons(List<Polygon> existingPolygons) async {
+  Future<void> addPolygons(List<PolygonData> existingPolygons) async {
     await _polygonHandler.add(existingPolygons);
   }
 
   /// Retrieves all polygons by delegating to PolygonHandler.
-  List<Polygon> getAllPolygons() {
+  ///
+  /// Returns a list of [PolygonData] objects containing both the polygon
+  /// geometry and its associated styling (fill color, outline color, opacity).
+  List<PolygonData> getAllPolygons() {
     return _polygonHandler.getAll();
   }
 
@@ -181,6 +187,32 @@ class MapboxDrawController with ChangeNotifier {
   void _setLoading(bool value) {
     _isLoading = value;
     notifyListeners();
+  }
+
+  /// Sets the drawing style for new polygons.
+  ///
+  /// This can be called to change the color of polygons that will be drawn.
+  ///
+  /// Example:
+  /// ```dart
+  /// controller.setPolygonDrawingStyle(
+  ///   fillColor: Colors.purple,
+  ///   outlineColor: Colors.yellow,
+  ///   opacity: 0.6,
+  /// );
+  /// ```
+  void setPolygonDrawingStyle({
+    Color? fillColor,
+    Color? outlineColor,
+    double? opacity,
+    Map<String, dynamic>? metadata,
+  }) {
+    _polygonHandler.setDrawingStyle(
+      fillColor: fillColor,
+      outlineColor: outlineColor,
+      opacity: opacity,
+      metadata: metadata,
+    );
   }
 
   /// Dispose method to clean up annotation managers.
