@@ -38,7 +38,7 @@ dependencies:
   mapbox_maps_flutter:
     git:
       url: https://github.com/brandon-watkins-avcrm/mapbox-maps-flutter.git
-      ref: 5d7e58d
+      ref: b50c96f
   mapbox_maps_flutter_draw:
     # When depending on this package from a real application you should use:
     # mapbox_maps_flutter_draw: ^x.y.z
