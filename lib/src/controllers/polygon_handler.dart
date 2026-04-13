@@ -32,6 +32,9 @@ class PolygonHandler extends GeometryHandler {
   // Metadata storage (keyed by polygon annotation ID)
   final Map<String, Map<String, dynamic>> _polygonMetadata = {};
 
+  // Store the MapboxMap controller for use in tap listener
+  MapboxMap? _mapController;
+
   // Initialization flag to prevent operations before managers are fully ready
   bool _isInitialized = false;
 
@@ -71,6 +74,7 @@ class PolygonHandler extends GeometryHandler {
       {GeometryStyle? style,
       Function(GeometryChangeEvent event)? onChange}) async {
     this.onChange = onChange;
+    _mapController = mapController;
 
     _circleAnnotationManager = await mapController.annotations
         .createCircleAnnotationManager(id: 'mapbox_draw_polygon_circles');
@@ -91,9 +95,6 @@ class PolygonHandler extends GeometryHandler {
       ..setFillColor(style?.color?.value ?? Colors.redAccent.value)
       ..setFillOutlineColor(style?.strokeColor?.value ?? Colors.white.value)
       ..setFillOpacity(style?.opacity ?? 0.8);
-
-    _polygonAnnotationManager!
-        .addOnPolygonAnnotationClickListener(_AnnotationClickListener(this));
 
     // Register PolygonHandler tap listener
     MapTapHandler().addTapListener(_onMapTapListener);
@@ -315,16 +316,32 @@ class PolygonHandler extends GeometryHandler {
     }
   }
 
-  /// Handles map tap events to add points to the polygon.
+  /// Handles map tap events to add points to the polygon or delete polygons.
   Future<void> _onMapTapListener(MapContentGestureContext context) async {
-    if (_controller.editingMode != EditingMode.DRAW_POLYGON ||
-        _controller.isLoading) {
-      return; // Only add points when in draw polygon mode and not loading
-    }
+    if (_controller.isLoading) return;
 
     // Check if fully initialized before processing taps
     if (!_isInitialized) {
       print('PolygonHandler not fully initialized, ignoring tap.');
+      return;
+    }
+
+    if (_controller.editingMode == EditingMode.DELETE) {
+      // Check if the tap point falls inside any existing polygon
+      final tapLng = context.point.coordinates.lng;
+      final tapLat = context.point.coordinates.lat;
+
+      for (final polygon in List<PolygonAnnotation>.from(polygons)) {
+        final ring = polygon.geometry.coordinates[0];
+        if (_isPointInPolygon(tapLng, tapLat, ring)) {
+          await deletePolygon(polygon);
+          return;
+        }
+      }
+      return;
+    }
+
+    if (_controller.editingMode != EditingMode.DRAW_POLYGON) {
       return;
     }
 
@@ -375,6 +392,23 @@ class PolygonHandler extends GeometryHandler {
     } finally {
       _controller._setLoading(false);
     }
+  }
+
+  /// Ray-casting algorithm to check if a point is inside a polygon ring.
+  bool _isPointInPolygon(
+      num testLng, num testLat, List<Position> ring) {
+    var inside = false;
+    for (var i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      final xi = ring[i].lng;
+      final yi = ring[i].lat;
+      final xj = ring[j].lng;
+      final yj = ring[j].lat;
+
+      final intersect = ((yi > testLat) != (yj > testLat)) &&
+          (testLng < (xj - xi) * (testLat - yi) / (yj - yi) + xi);
+      if (intersect) inside = !inside;
+    }
+    return inside;
   }
 
   /// Deletes a polygon annotation.
@@ -483,19 +517,5 @@ class PolygonHandler extends GeometryHandler {
     _polygonPointsController.close();
     _polygonsController.close();
     polygons.clear();
-  }
-}
-
-/// Internal class to handle polygon annotation clicks.
-class _AnnotationClickListener extends OnPolygonAnnotationClickListener {
-  final PolygonHandler _polygonHandler;
-
-  _AnnotationClickListener(this._polygonHandler);
-
-  @override
-  void onPolygonAnnotationClick(PolygonAnnotation annotation) {
-    if (_polygonHandler._controller.editingMode == EditingMode.DELETE) {
-      _polygonHandler.deletePolygon(annotation);
-    }
   }
 }
