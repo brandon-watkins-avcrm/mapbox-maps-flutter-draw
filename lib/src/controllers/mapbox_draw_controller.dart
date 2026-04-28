@@ -215,6 +215,32 @@ class MapboxDrawController with ChangeNotifier {
     );
   }
 
+  /// Sets the drawing style for new lines.
+  ///
+  /// This can be called to change the color, width, or opacity of the line
+  /// currently being drawn. The color is applied to both the in-progress
+  /// polyline and the per-tap circle markers so they stay in sync.
+  ///
+  /// Example:
+  /// ```dart
+  /// controller.setLineDrawingStyle(
+  ///   color: Colors.red,
+  ///   width: 6,
+  ///   opacity: 0.9,
+  /// );
+  /// ```
+  void setLineDrawingStyle({
+    Color? color,
+    double? width,
+    double? opacity,
+  }) {
+    _lineHandler.setDrawingStyle(
+      color: color,
+      width: width,
+      opacity: opacity,
+    );
+  }
+
   /// Dispose method to clean up annotation managers.
   @override
   void dispose() {

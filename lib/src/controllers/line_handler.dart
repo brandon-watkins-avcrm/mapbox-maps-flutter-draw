@@ -252,6 +252,38 @@ class LineHandler extends GeometryHandler {
     }
   }
 
+  /// Sets the style for the line currently being drawn.
+  ///
+  /// This can be called at any time to change the color, width, or opacity
+  /// of the in-progress line. The color is applied to both the polyline and
+  /// the per-tap circle markers so they stay in sync; width and opacity
+  /// affect the polyline only.
+  ///
+  /// Example:
+  /// ```dart
+  /// lineHandler.setDrawingStyle(
+  ///   color: Colors.red,
+  ///   width: 6,
+  ///   opacity: 0.9,
+  /// );
+  /// ```
+  void setDrawingStyle({
+    Color? color,
+    double? width,
+    double? opacity,
+  }) {
+    if (color != null) {
+      _polylineAnnotationManager?.setLineColor(color.value);
+      _circleAnnotationManager?.setCircleColor(color.value);
+    }
+    if (width != null) {
+      _polylineAnnotationManager?.setLineWidth(width);
+    }
+    if (opacity != null) {
+      _polylineAnnotationManager?.setLineOpacity(opacity);
+    }
+  }
+
   /// Dispose method to clean up annotation managers.
   @override
   void dispose() {
