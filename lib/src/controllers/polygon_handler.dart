@@ -22,15 +22,27 @@ class PolygonHandler extends GeometryHandler {
   // Annotation Managers
   CircleAnnotationManager? _circleAnnotationManager;
   PolygonAnnotationManager? _polygonAnnotationManager;
+  // Outline annotations rendered alongside each polygon's fill so that
+  // outline width is configurable (Mapbox's native fill-outline is fixed at
+  // 1 px). Each polygon's outer ring is mirrored as a polyline annotation.
+  PolylineAnnotationManager? _polylineAnnotationManager;
 
   // Current drawing style (used when drawing a new polygon)
   Color? _currentDrawingFillColor;
   Color? _currentDrawingOutlineColor;
+  double? _currentDrawingOutlineWidth;
   double? _currentDrawingOpacity;
   Map<String, dynamic>? _currentDrawingMetadata;
 
   // Metadata storage (keyed by polygon annotation ID)
   final Map<String, Map<String, dynamic>> _polygonMetadata = {};
+
+  // Per-polygon outline tracking, keyed by polygon annotation id.
+  final Map<String, PolylineAnnotation> _polygonOutlines = {};
+
+  // Default outline style applied when a PolygonData omits its own.
+  Color? _defaultOutlineColor;
+  double? _defaultOutlineWidth;
 
   // Store the MapboxMap controller for use in tap listener
   MapboxMap? _mapController;
@@ -96,6 +108,19 @@ class PolygonHandler extends GeometryHandler {
       ..setFillOutlineColor(style?.strokeColor?.value ?? Colors.white.value)
       ..setFillOpacity(style?.opacity ?? 0.8);
 
+    // Outline manager sits between the fill polygons and the circle markers
+    // (added after fills, with `below: circles`, so it stacks on top of them).
+    _polylineAnnotationManager = await mapController.annotations
+        .createPolylineAnnotationManager(below: 'mapbox_draw_polygon_circles');
+
+    _polylineAnnotationManager!
+      ..setLineEmissiveStrength(1)
+      ..setLineCap(LineCap.ROUND)
+      ..setLineJoin(LineJoin.ROUND);
+
+    _defaultOutlineColor = style?.strokeColor;
+    _defaultOutlineWidth = style?.strokeWidth;
+
     // Register PolygonHandler tap listener
     MapTapHandler().addTapListener(_onMapTapListener);
 
@@ -139,6 +164,8 @@ class PolygonHandler extends GeometryHandler {
     _emitPolygonPointsChange();
     _currentPolygon = null;
     polygons.clear();
+    await _polylineAnnotationManager?.deleteAll();
+    _polygonOutlines.clear();
 
     for (final item in polygonDataList) {
       try {
@@ -153,6 +180,12 @@ class PolygonHandler extends GeometryHandler {
             await _polygonAnnotationManager!.create(annotationOption);
         polygons.add(newPolyAnn);
 
+        await _createOutline(
+          newPolyAnn,
+          outlineColor: item.outlineColor,
+          outlineWidth: item.outlineWidth,
+        );
+
         // Store metadata in our Map if provided
         if (item.metadata != null) {
           _polygonMetadata[newPolyAnn.id] = item.metadata!;
@@ -165,22 +198,80 @@ class PolygonHandler extends GeometryHandler {
     _controller.notifyListeners();
   }
 
+  /// Creates a line annotation tracing the outer ring of [polygon] so that
+  /// the outline width can be configured (Mapbox's native fill-outline is
+  /// fixed at 1 px). The annotation is tracked in [_polygonOutlines] keyed
+  /// by the polygon annotation's id so it can be removed alongside the
+  /// fill when the polygon is deleted.
+  Future<void> _createOutline(
+    PolygonAnnotation polygon, {
+    Color? outlineColor,
+    double? outlineWidth,
+  }) async {
+    if (_polylineAnnotationManager == null) return;
+
+    final rings = polygon.geometry.coordinates;
+    if (rings.isEmpty) return;
+    final outer = rings.first;
+    if (outer.length < 2) return;
+
+    // `Polygon.fromPoints` does not append the closing vertex; Mapbox auto-
+    // closes the fill visually but a polyline trace would miss the segment
+    // from last → first. Append the first point if the ring isn't already
+    // closed so the outline draws all the way around.
+    final closedOuter =
+        outer.first == outer.last ? outer : <Position>[...outer, outer.first];
+
+    final color = outlineColor ?? _defaultOutlineColor;
+    final width = outlineWidth ?? _defaultOutlineWidth;
+
+    try {
+      final outline = await _polylineAnnotationManager!.create(
+        PolylineAnnotationOptions(
+          geometry: LineString(coordinates: closedOuter),
+          lineColor: color?.value,
+          lineWidth: width,
+          // Outline is decoupled from the polygon's fill opacity — a faded
+          // outline reads as a thin/missing border, so we render at full
+          // opacity by default.
+          lineOpacity: 1.0,
+        ),
+      );
+      _polygonOutlines[polygon.id] = outline;
+    } catch (e) {
+      print('Error adding polygon outline: $e');
+    }
+  }
+
+  /// Removes the outline annotation associated with [polygonId], if any.
+  Future<void> _removeOutline(String polygonId) async {
+    final outline = _polygonOutlines.remove(polygonId);
+    if (outline == null || _polylineAnnotationManager == null) return;
+    try {
+      await _polylineAnnotationManager!.delete(outline);
+    } catch (e) {
+      print('Error removing polygon outline: $e');
+    }
+  }
+
   /// Retrieves all polygons from the map as [PolygonData] objects.
   ///
   /// Each returned [PolygonData] includes the polygon geometry and its
   /// associated styling (fill color, outline color, opacity) and metadata.
   List<PolygonData> getAll() {
-    return polygons
-        .map((e) => PolygonData(
-              polygon: e.geometry,
-              fillColor: e.fillColor != null ? Color(e.fillColor!) : null,
-              outlineColor: e.fillOutlineColor != null
-                  ? Color(e.fillOutlineColor!)
-                  : null,
-              opacity: e.fillOpacity,
-              metadata: _polygonMetadata[e.id],
-            ))
-        .toList();
+    return polygons.map((e) {
+      final outline = _polygonOutlines[e.id];
+      return PolygonData(
+        polygon: e.geometry,
+        fillColor: e.fillColor != null ? Color(e.fillColor!) : null,
+        outlineColor: outline?.lineColor != null
+            ? Color(outline!.lineColor!)
+            : (e.fillOutlineColor != null ? Color(e.fillOutlineColor!) : null),
+        outlineWidth: outline?.lineWidth,
+        opacity: e.fillOpacity,
+        metadata: _polygonMetadata[e.id],
+      );
+    }).toList();
   }
 
   /// Starts the polygon drawing process.
@@ -204,16 +295,27 @@ class PolygonHandler extends GeometryHandler {
   Future<void> startDrawing({
     Color? fillColor,
     Color? outlineColor,
+    double? outlineWidth,
     double? opacity,
     Map<String, dynamic>? metadata,
   }) async {
     // Set the drawing style
     _currentDrawingFillColor = fillColor;
     _currentDrawingOutlineColor = outlineColor;
+    _currentDrawingOutlineWidth = outlineWidth;
     _currentDrawingOpacity = opacity;
     _currentDrawingMetadata = metadata;
 
-    // Reset any existing drawing state
+    // Reset any existing drawing state. The in-progress fill is rendered as
+    // a real polygon annotation while the user is dragging — null'ing the
+    // reference without deleting it would orphan the annotation on the map.
+    if (_currentPolygon != null && _polygonAnnotationManager != null) {
+      try {
+        await _polygonAnnotationManager!.delete(_currentPolygon!);
+      } catch (e) {
+        print('Error removing in-progress polygon: $e');
+      }
+    }
     _currentPolygon = null;
     _polygonPoints.clear();
     _emitPolygonPointsChange();
@@ -239,11 +341,13 @@ class PolygonHandler extends GeometryHandler {
   void setDrawingStyle({
     Color? fillColor,
     Color? outlineColor,
+    double? outlineWidth,
     double? opacity,
     Map<String, dynamic>? metadata,
   }) {
     _currentDrawingFillColor = fillColor;
     _currentDrawingOutlineColor = outlineColor;
+    _currentDrawingOutlineWidth = outlineWidth;
     _currentDrawingOpacity = opacity;
     _currentDrawingMetadata = metadata;
 
@@ -260,6 +364,7 @@ class PolygonHandler extends GeometryHandler {
   void clearDrawingStyle() {
     _currentDrawingFillColor = null;
     _currentDrawingOutlineColor = null;
+    _currentDrawingOutlineWidth = null;
     _currentDrawingOpacity = null;
     _currentDrawingMetadata = null;
   }
@@ -283,6 +388,12 @@ class PolygonHandler extends GeometryHandler {
         );
 
         polygons.add(newPoly);
+
+        await _createOutline(
+          newPoly,
+          outlineColor: _currentDrawingOutlineColor,
+          outlineWidth: _currentDrawingOutlineWidth,
+        );
 
         // Store metadata in our Map if provided
         if (_currentDrawingMetadata != null) {
@@ -419,6 +530,7 @@ class PolygonHandler extends GeometryHandler {
         polygons.removeWhere((poly) => poly.id == polygon.id);
         _polygonMetadata
             .remove(polygon.id); // Remove metadata for deleted polygon
+        await _removeOutline(polygon.id);
         _emitPolygonsChange();
 
         if (onChange != null) {
@@ -444,6 +556,8 @@ class PolygonHandler extends GeometryHandler {
 
         // Delete all polygons from the map
         await _polygonAnnotationManager!.deleteAll();
+        await _polylineAnnotationManager?.deleteAll();
+        _polygonOutlines.clear();
 
         // Clear the polygons list
         polygons.clear();
@@ -513,7 +627,9 @@ class PolygonHandler extends GeometryHandler {
     _isInitialized = false;
     MapTapHandler().removeTapListener(_onMapTapListener);
     _polygonAnnotationManager?.deleteAll();
+    _polylineAnnotationManager?.deleteAll();
     _circleAnnotationManager?.deleteAll();
+    _polygonOutlines.clear();
     _polygonPointsController.close();
     _polygonsController.close();
     polygons.clear();

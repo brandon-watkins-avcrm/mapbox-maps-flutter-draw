@@ -66,6 +66,11 @@ class PolygonData {
   /// The outline color for this polygon. If null, uses the default style stroke color.
   final Color? outlineColor;
 
+  /// The outline thickness in pixels. If null, uses the default style stroke width.
+  /// Mapbox's native fill-outline is fixed at 1px, so the package renders the
+  /// outline as a separate line annotation to honour this value.
+  final double? outlineWidth;
+
   /// The opacity for this polygon. If null, uses the default style opacity.
   final double? opacity;
 
@@ -77,6 +82,7 @@ class PolygonData {
     required this.polygon,
     this.fillColor,
     this.outlineColor,
+    this.outlineWidth,
     this.opacity,
     this.metadata,
   });

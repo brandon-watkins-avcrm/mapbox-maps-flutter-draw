@@ -204,12 +204,14 @@ class MapboxDrawController with ChangeNotifier {
   void setPolygonDrawingStyle({
     Color? fillColor,
     Color? outlineColor,
+    double? outlineWidth,
     double? opacity,
     Map<String, dynamic>? metadata,
   }) {
     _polygonHandler.setDrawingStyle(
       fillColor: fillColor,
       outlineColor: outlineColor,
+      outlineWidth: outlineWidth,
       opacity: opacity,
       metadata: metadata,
     );
